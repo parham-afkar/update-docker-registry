@@ -4,6 +4,8 @@ REGISTRY_URL="docker-registry"
 USERNAME="username"
 PASSWORD="password"
 
+DOCKER_HUB="docker.io"
+
 echo "Which?:"
 echo "1) Pull and push new image or update specify image:tag"
 echo "2) Update all images in your docker registry"
@@ -26,22 +28,23 @@ if [[ "$choice" -eq 1 ]]; then
   fi
 
   image="$REGISTRY_URL/$repo:$tag"
+  hub_image="$DOCKER_HUB/$repo:$tag"
 
   echo "Checking if $image exists in the registry..."
   status=$(curl -s -o /dev/null -w "%{http_code}" -u "$USERNAME:$PASSWORD" "https://$REGISTRY_URL/v2/$repo/manifests/$tag")
 
   if [[ "$status" -eq 200 ]]; then
     echo "$image exists in the registry. Updating the image..."
-    docker pull "$image" || { echo "Failed to pull $image. Exiting..."; exit 1; }
+    docker pull "$hub_image" || { echo "Failed to pull $hub_image from Docker Hub. Exiting..."; exit 1; }
   else
-    echo "$image does not exist in the registry. Pulling from another source..."
-    docker pull "$repo:$tag" || { echo "Failed to pull $repo:$tag from the default source. Exiting..."; exit 1; }
+    echo "$image does not exist in the registry. Pulling from Docker Hub..."
+    docker pull "$hub_image" || { echo "Failed to pull $hub_image from Docker Hub. Exiting..."; exit 1; }
 
     echo "Tagging image as $image..."
-    docker tag "$repo:$tag" "$image"
+    docker tag "$hub_image" "$image"
   fi
 
-  echo "Pushing $image to the registry..."
+  echo "Pushing $image to the private registry..."
   docker push "$image" || { echo "Failed to push $image. Exiting..."; exit 1; }
 
   echo "Successfully processed $image."
@@ -68,17 +71,17 @@ elif [[ "$choice" -eq 2 ]]; then
 
     for tag in $tags; do
       image="$REGISTRY_URL/$repo:$tag"
+      hub_image="$DOCKER_HUB/$repo:$tag"
       echo "Processing image: $image"
 
-      echo "Pulling $image..."
-      docker pull "$image" || { echo "Failed to pull $image. Skipping..."; continue; }
+      echo "Pulling $hub_image from Docker Hub..."
+      docker pull "$hub_image" || { echo "Failed to pull $hub_image from Docker Hub. Skipping..."; continue; }
 
-      new_image="$REGISTRY_URL/$repo:$tag"
-      echo "Tagging image as $new_image..."
-      docker tag "$image" "$new_image"
+      echo "Tagging image as $image..."
+      docker tag "$hub_image" "$image"
 
-      echo "Pushing $new_image back to the registry..."
-      docker push "$new_image" || { echo "Failed to push $new_image. Skipping..."; continue; }
+      echo "Pushing $image to the private registry..."
+      docker push "$image" || { echo "Failed to push $image. Skipping..."; continue; }
 
       echo "Successfully processed $image."
     done
