@@ -12,19 +12,20 @@ echo "2) Update all images in your docker registry"
 read -p "Enter your choice (1 or 2): " choice
 
 if [[ "$choice" -eq 1 ]]; then
-  read -p "Enter the image:tag: " user_input
+  read -p "Enter the image:tag (default tag is 'latest' if not specified): " user_input
 
   if [[ -z "$user_input" ]]; then
     echo "No input provided. Exiting..."
     exit 1
   fi
 
-  repo=$(echo "$user_input" | cut -d':' -f1)
-  tag=$(echo "$user_input" | cut -d':' -f2)
-
-  if [[ -z "$repo" || -z "$tag" ]]; then
-    echo "Invalid input. Ensure the format is repository_name:image_tag."
-    exit 1
+  # Extract repository and tag, default tag is "latest"
+  if [[ "$user_input" == *":"* ]]; then
+    repo=$(echo "$user_input" | rev | cut -d':' -f2- | rev)
+    tag=$(echo "$user_input" | rev | cut -d':' -f1 | rev)
+  else
+    repo="$user_input"
+    tag="latest"
   fi
 
   image="$REGISTRY_URL/$repo:$tag"
@@ -46,6 +47,9 @@ if [[ "$choice" -eq 1 ]]; then
 
   echo "Pushing $image to the private registry..."
   docker push "$image" || { echo "Failed to push $image. Exiting..."; exit 1; }
+
+  echo "Removing local image to free up space..."
+  docker rmi "$hub_image" "$image" || { echo "Failed to remove local images."; }
 
   echo "Successfully processed $image."
 
@@ -82,6 +86,9 @@ elif [[ "$choice" -eq 2 ]]; then
 
       echo "Pushing $image to the private registry..."
       docker push "$image" || { echo "Failed to push $image. Skipping..."; continue; }
+
+      echo "Removing local image to free up space..."
+      docker rmi "$hub_image" "$image" || { echo "Failed to remove local images."; }
 
       echo "Successfully processed $image."
     done
